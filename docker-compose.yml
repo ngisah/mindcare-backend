@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mindcare_network
+
+  userservice:
+    build: ./services/userService
+    ports:
+      - '3001:3001'
+    depends_on:
+      - postgres
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_DATABASE}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+    networks:
+      - mindcare_network
+
+  analyticsservice:
+    build: ./services/analyticsService
+    ports:
+      - '3006:3006'
+    networks:
+      - mindcare_network
+    environment:
+      - CLICKHOUSE_HOST=http://host.docker.internal:8123
+
+networks:
+  mindcare_network:
+    driver: bridge
+
+volumes:
+  postgres_data: 
