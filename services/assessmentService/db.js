@@ -1,11 +1,8 @@
 const { Pool } = require('pg');
+require('dotenv').config();
 
 const pool = new Pool({
-  user: 'ngisah',
-  host: 'localhost',
-  database: 'mindcare_db',
-  password: '02796',
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
 });
 
 module.exports = {

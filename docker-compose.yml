@@ -34,7 +34,18 @@ services:
     networks:
       - mindcare_network
     environment:
-      - CLICKHOUSE_HOST=http://host.docker.internal:8123
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+
+  assessmentservice:
+    build: ./services/assessmentService
+    ports:
+      - '3004:3004'
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_DATABASE}
+    depends_on:
+      - postgres
+    networks:
+      - mindcare_network
 
 networks:
   mindcare_network:
