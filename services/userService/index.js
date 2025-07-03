@@ -1,25 +1,24 @@
 require('dotenv').config({ path: '../../.env' });
 const express = require('express');
-const app = express();
-const port = 3001;
-
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 
+const app = express();
+const port = process.env.USER_SERVICE_PORT || 3000;
+
 app.use(express.json());
-
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.originalUrl}`);
-  next();
-});
-
-app.get('/', (req, res) => {
-  res.send('User Service is running!');
-});
-
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
-app.listen(port, () => {
-  console.log(`User Service listening at http://localhost:${port}`);
-});
+let server;
+// Only listen if the file is run directly
+if (require.main === module) {
+    server = app.listen(port, () => {
+        console.log(`User service listening at http://localhost:${port}`);
+    });
+} else {
+    // For testing
+    server = app.listen(0);
+}
+
+module.exports = { app, server };
