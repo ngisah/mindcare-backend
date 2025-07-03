@@ -1,11 +1,14 @@
 const express = require('express');
+const notificationRoutes = require('./routes/notifications');
+
 const app = express();
-const port = 3005;
+const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
-  res.send('Notification Service is running!');
+app.use(express.json());
+app.use('/', notificationRoutes);
+
+const server = app.listen(port, () => {
+    console.log(`Notification service listening at http://localhost:${port}`);
 });
 
-app.listen(port, () => {
-  console.log(`Notification Service listening at http://localhost:${port}`);
-});
+module.exports = { app, server };

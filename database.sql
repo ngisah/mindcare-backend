@@ -113,6 +113,16 @@ CREATE TABLE community_comments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Notifications table
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    type VARCHAR(20) NOT NULL, -- 'email' or 'sms'
+    status VARCHAR(20) NOT NULL, -- 'sent', 'failed'
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Payments table
 CREATE TABLE payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

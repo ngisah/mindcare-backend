@@ -143,31 +143,87 @@ const getAssessmentRecommendations = async (req, res) => {
 
   try {
     // 1. Get the latest assessment for the user
-    const latestAssessment = await db.query(
-      'SELECT * FROM assessment_responses WHERE user_id = $1 ORDER BY completed_at DESC LIMIT 1',
+    const latestAssessmentResult = await db.query(
+      'SELECT r.*, t.name as template_name FROM assessment_responses r JOIN assessment_templates t ON r.template_id = t.id WHERE r.user_id = $1 ORDER BY r.completed_at DESC LIMIT 1',
       [user_id]
     );
 
-    if (latestAssessment.rows.length === 0) {
+    if (latestAssessmentResult.rows.length === 0) {
       return res.status(404).json({ recommendations: [], message: 'No assessments found for this user.' });
     }
 
-    const { scores } = latestAssessment.rows[0];
-    const totalScore = scores.total_score || 0; // Assuming scores is a JSONB with a total_score field
+    const latestAssessment = latestAssessmentResult.rows[0];
+    const { interpretation, template_name, cultural_context } = latestAssessment;
+    const { level, special_notices } = interpretation;
 
-    // 2. Provide recommendations based on the score
+    // 2. Generate recommendations based on the interpretation level and assessment type
     let recommendations = [];
-    if (totalScore > 15) {
+
+    // Prioritize crisis support based on special notices (e.g., self-harm question)
+    if (special_notices && special_notices.length > 0) {
       recommendations.push({
-        type: 'professional_help',
-        message: 'Your assessment score is high. We recommend seeking professional help. You can find a list of local therapists in our resource center.',
-      });
-    } else {
-      recommendations.push({
-        type: 'self_help',
-        message: 'Your assessment score is in a manageable range. We recommend exploring our self-help resources for continued well-being.',
+        type: 'crisis_support',
+        title: 'Immediate Support Recommended',
+        message: `Your assessment raised some important concerns. ${special_notices.join(' ')} We strongly recommend contacting a crisis support line immediately.`,
+        resource_link: '/resources/crisis-support' // Placeholder link
       });
     }
+
+    // Generate recommendations based on severity level
+    switch (level) {
+      case 'Severe':
+      case 'Moderately Severe':
+        recommendations.push({
+          type: 'professional_help',
+          title: 'Professional Support Recommended',
+          message: `Your results from the ${template_name} indicate a ${level.toLowerCase()} level of symptoms. Seeking support from a mental health professional is strongly advised.`,
+          resource_link: '/resources/therapist-directory' // Placeholder link
+        });
+        break;
+      case 'Moderate':
+        recommendations.push({
+          type: 'professional_help',
+          title: 'Consider Professional Support',
+          message: `Your results from the ${template_name} indicate a moderate level of symptoms. Speaking with a mental health professional could be very beneficial.`,
+          resource_link: '/resources/therapist-directory' // Placeholder link
+        });
+        recommendations.push({
+            type: 'self_help',
+            title: 'Guided Self-Help Exercises',
+            message: 'We also have guided exercises that may help you manage your symptoms. You can find them in our resource center.',
+            resource_link: `/resources/exercises/${template_name.toLowerCase().split(' ')[0]}` // Placeholder
+        });
+        break;
+      case 'Mild':
+        recommendations.push({
+          type: 'self_help',
+          title: 'Self-Help Resources',
+          message: `Your results from the ${template_name} suggest mild symptoms. Exploring self-help resources like guided meditations or educational articles can be a great next step.`,
+          resource_link: `/resources/articles/${template_name.toLowerCase().split(' ')[0]}` // Placeholder
+        });
+        break;
+      case 'None-minimal':
+      case 'Minimal':
+      case 'Low Stress':
+        recommendations.push({
+            type: 'well_being',
+            title: 'Maintain Your Well-being',
+            message: 'Your assessment results are in a healthy range. Continue to practice self-care and monitor your well-being. Check out our resources for maintaining mental fitness.',
+            resource_link: '/resources/well-being' // Placeholder
+        });
+        break;
+    }
+
+    // Add culturally specific recommendations (placeholder)
+    if (cultural_context && cultural_context.region === 'East Africa') {
+        recommendations.push({
+            type: 'cultural_resource',
+            title: 'Culturally-Specific Resource',
+            message: 'We have resources that are specifically tailored for East African cultural contexts. You may find them particularly helpful.',
+            resource_link: '/resources/cultural/east-africa' // Placeholder
+        });
+    }
+
 
     res.json({ recommendations });
   } catch (error) {
