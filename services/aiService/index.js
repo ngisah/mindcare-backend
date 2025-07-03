@@ -1,18 +1,15 @@
 require('dotenv').config({ path: '../../.env' });
 const express = require('express');
-const app = express();
-const port = 3003;
-
 const aiRoutes = require('./routes/ai');
 
+const app = express();
+const port = process.env.PORT || 3000;
+
 app.use(express.json());
+app.use('/', aiRoutes);
 
-app.get('/', (req, res) => {
-  res.send('AI Service is running!');
+const server = app.listen(port, () => {
+    console.log(`AI service listening at http://localhost:${port}`);
 });
 
-app.use('/ai', aiRoutes);
-
-app.listen(port, () => {
-  console.log(`AI Service listening at http://localhost:${port}`);
-});
+module.exports = { app, server };

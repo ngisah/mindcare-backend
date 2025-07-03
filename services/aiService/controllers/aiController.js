@@ -1,7 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const db = require('../db'); // Assuming a db module exists
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' });
 
 const crisisDetection = {
   suicideKeywords: [
@@ -20,78 +20,46 @@ const detectCrisisIndicators = (message) => {
   return 0; // No crisis detected
 };
 
-const processAIRequest = async (req, res) => {
-  const { userMessage, userContext } = req.body;
+const handleChat = async (req, res) => {
+    const { message, history, userId, culturalContext } = req.body;
 
-  try {
-    // 1. Crisis detection
-    const crisisLevel = detectCrisisIndicators(userMessage);
-
-    // 2. Cultural context preparation
-    const culturalContextPrompt = `
-      You are a mental health support AI designed specifically for African users.
-      Your responses should:
-
-      1. Respect African cultural values including:
-         - Ubuntu philosophy (interconnectedness)
-         - Respect for elders and community wisdom
-         - Spiritual and religious considerations
-         - Extended family support systems
-
-      2. Language considerations:
-         - User's preferred language: ${userContext.userLanguage}
-         - Cultural idioms and expressions
-         - Appropriate formality levels
-         - Local terminology for mental health concepts
-
-      3. Cultural mental health approaches:
-         - Integration with traditional healing practices
-         - Community-based support systems
-         - Religious and spiritual coping mechanisms
-         - Cultural stigma awareness and sensitivity
-
-      4. Crisis intervention culturally appropriate methods:
-         - Family and community involvement protocols
-         - Religious leader consultation when appropriate
-         - Cultural emergency contacts and resources
-         - Traditional calming and grounding techniques
-
-      Current user context:
-      - Cultural background: ${userContext.userCulture}
-      - Language preference: ${userContext.userLanguage}
-      - Location: ${userContext.userLocation}
-      - Previous conversation context: ${userContext.conversationHistory}
-    `;
-
-    // 3. Gemini API call
-    const result = await model.generateContent(culturalContextPrompt + userMessage);
-    const response = await result.response;
-    const text = response.text();
-
-    // 4. Response validation and filtering (simplified)
-    const validatedResponse = text; // Placeholder
-
-    // 5. Cultural enhancement (simplified)
-    const enhancedResponse = validatedResponse; // Placeholder
-
-    // 6. Crisis escalation if needed
-    if (crisisLevel > 0) {
-      // In a real application, this would trigger a more robust crisis protocol,
-      // such as notifying a human crisis counselor.
-      console.log(`Crisis detected with level ${crisisLevel}. Escalating...`);
-      // For now, we will just prepend a crisis warning to the response.
-      const crisisResponse = "It sounds like you are going through a difficult time. Please know that there is help available. You can connect with people who can support you by calling or texting 988 anytime in the US and Canada. In the UK, you can call 111.";
-      return res.json({ response: crisisResponse, crisisLevel });
+    if (!message || !history) {
+        return res.status(400).send({ error: 'Missing required fields: message, history' });
     }
 
-    res.json({ response: enhancedResponse, crisisLevel });
-  } catch (error) {
-    console.error(error);
-    res.status(500).send('Server error');
-  }
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+        // Add cultural context to the prompt
+        const culturalPrompt = `You are a culturally sensitive AI assistant for MindCare Africa. The user's cultural context is: ${JSON.stringify(culturalContext)}. Please respond to the following message in a way that is empathetic, supportive, and respectful of their background.`;
+        
+        const fullHistory = [
+            ...history,
+            {
+                role: "user",
+                parts: [{ text: `${culturalPrompt}\n\nUser: ${message}` }],
+            }
+        ];
+
+        const chat = model.startChat({
+            history: fullHistory.slice(0, -1), // Pass all but the last message
+        });
+        
+        const result = await chat.sendMessage(message);
+        const response = await result.response;
+        const text = response.text();
+
+        // Optionally, save the interaction to the database
+        // await db.query('INSERT INTO messages ...');
+
+        res.status(200).send({ response: text });
+    } catch (error) {
+        console.error('Error handling chat:', error);
+        res.status(500).send({ error: 'Failed to get response from AI' });
+    }
 };
 
 module.exports = {
-  processAIRequest,
+    handleChat
 };
 
