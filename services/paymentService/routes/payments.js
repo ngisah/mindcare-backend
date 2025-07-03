@@ -1,13 +1,14 @@
-
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 
-router.post('/process', paymentController.processPayment);
-router.post('/webhook', paymentController.handleWebhook);
-router.get('/subscriptions/:userId', paymentController.getUserSubscriptions);
-router.post('/subscriptions', paymentController.createSubscription);
-router.put('/subscriptions/:subscriptionId', paymentController.updateSubscription);
-router.delete('/subscriptions/:subscriptionId', paymentController.cancelSubscription);
+// POST /payments/create-payment-intent
+router.post('/create-payment-intent', paymentController.createPaymentIntent);
+
+// POST /payments/webhook
+router.post('/webhook', express.raw({type: 'application/json'}), paymentController.handleWebhook);
+
+// GET /payments/:userId
+router.get('/:userId', paymentController.getPaymentHistory);
 
 module.exports = router;

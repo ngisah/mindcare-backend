@@ -1,82 +1,77 @@
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const db = require('../db'); // Assuming a db module exists
 
-const pool = require('../models/payment'); // Assuming payment.js will be created for connection
+const createPaymentIntent = async (req, res) => {
+    const { amount, currency, userId } = req.body;
 
-exports.processPayment = async (req, res) => {
+    if (!amount || !currency || !userId) {
+        return res.status(400).send({ error: 'Missing required fields: amount, currency, userId' });
+    }
+
     try {
-        const { userId, amount, currency, paymentMethodId, subscriptionPlanId } = req.body;
-        // Simulate payment processing
-        const transactionId = `txn_${Date.now()}`;
-        const status = 'completed';
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: amount * 100, // Amount in cents
+            currency: currency,
+            payment_method_types: ['card', 'mpesa'],
+            metadata: { userId }
+        });
 
-        const result = await pool.query(
-            'INSERT INTO payments (user_id, amount, currency, payment_method_id, subscription_plan_id, transaction_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-            [userId, amount, currency, paymentMethodId, subscriptionPlanId, transactionId, status]
+        // Save initial payment record to our DB
+        await db.query(
+            'INSERT INTO payments (id, user_id, amount, currency, status, transaction_id) VALUES ($1, $2, $3, $4, $5, $1)',
+            [paymentIntent.id, userId, amount, currency, paymentIntent.status]
         );
-        res.status(200).json({ message: 'Payment processed successfully', transaction: result.rows[0] });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
+
+        res.status(200).send({
+            clientSecret: paymentIntent.client_secret,
+        });
+    } catch (error) {
+        console.error('Error creating payment intent:', error);
+        res.status(500).send({ error: 'Failed to create payment intent' });
     }
 };
 
-exports.handleWebhook = async (req, res) => {
+const handleWebhook = async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let event;
+
     try {
-        // This would typically involve verifying the webhook signature and processing the event
-        console.log('Webhook received:', req.body);
-        res.status(200).json({ received: true });
+        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error('Webhook signature verification failed.', err.message);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    if (event.type === 'payment_intent.succeeded') {
+        const paymentIntent = event.data.object;
+        await db.query('UPDATE payments SET status = $1 WHERE transaction_id = $2', ['succeeded', paymentIntent.id]);
+        console.log(`PaymentIntent ${paymentIntent.id} succeeded.`);
+        // Fulfill the purchase (e.g., grant access to premium features)
+    } else if (event.type === 'payment_intent.payment_failed') {
+        const paymentIntent = event.data.object;
+        await db.query('UPDATE payments SET status = $1 WHERE transaction_id = $2', ['failed', paymentIntent.id]);
+        console.log(`PaymentIntent ${paymentIntent.id} failed.`);
+    }
+
+    res.status(200).send();
+};
+
+const getPaymentHistory = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const { rows } = await db.query('SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error fetching payment history:', error);
+        res.status(500).send({ error: 'Failed to fetch payment history' });
     }
 };
 
-exports.getUserSubscriptions = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const result = await pool.query('SELECT * FROM subscriptions WHERE user_id = $1', [userId]);
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-exports.createSubscription = async (req, res) => {
-    try {
-        const { userId, planId, startDate, endDate, status } = req.body;
-        const result = await pool.query(
-            'INSERT INTO subscriptions (user_id, plan_id, start_date, end_date, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [userId, planId, startDate, endDate, status]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-exports.updateSubscription = async (req, res) => {
-    try {
-        const { subscriptionId } = req.params;
-        const { planId, startDate, endDate, status } = req.body;
-        const result = await pool.query(
-            'UPDATE subscriptions SET plan_id = $1, start_date = $2, end_date = $3, status = $4 WHERE id = $5 RETURNING *',
-            [planId, startDate, endDate, status, subscriptionId]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Subscription not found' });
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
-
-exports.cancelSubscription = async (req, res) => {
-    try {
-        const { subscriptionId } = req.params;
-        const result = await pool.query('UPDATE subscriptions SET status = 'cancelled' WHERE id = $1 RETURNING *', [subscriptionId]);
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Subscription not found' });
-        }
-        res.json({ message: 'Subscription cancelled successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+module.exports = {
+    createPaymentIntent,
+    handleWebhook,
+    getPaymentHistory
 };
