@@ -69,12 +69,12 @@ const getDashboardStats = async (req, res) => {
 
 
         res.status(200).json({
-            totalUsers: totalUsersData.data[0].total_users,
-            eventsToday: eventsTodayData.data[0].events_today,
+            totalUsers: Number(totalUsersData.data[0].total_users),
+            eventsToday: Number(eventsTodayData.data[0].events_today),
             eventsOverTime: eventsOverTimeData.data,
-            avgResponseTime: avgResponseTimeData.data[0].avg_response_time,
-            errorRate: errorRateData.data[0].error_rate,
-            avgAssessmentScore: avgAssessmentScoreData.data[0].avg_assessment_score,
+            avgResponseTime: parseFloat(avgResponseTimeData.data[0].avg_response_time),
+            errorRate: parseFloat(errorRateData.data[0].error_rate),
+            avgAssessmentScore: parseFloat(avgAssessmentScoreData.data[0].avg_assessment_score),
         });
     } catch (error) {
         console.error(error);

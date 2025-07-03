@@ -1,16 +1,20 @@
+require('dotenv').config({ path: '../../.env' });
 const express = require('express');
-const app = express();
-const port = 3006;
 const analyticsRoutes = require('./routes/analyticsRoutes');
 
+const app = express();
+const port = process.env.ANALYTICS_SERVICE_PORT || 3000;
+
 app.use(express.json());
+app.use('/', analyticsRoutes);
 
-app.get('/', (req, res) => {
-  res.send('Analytics Service is running!');
-});
+let server;
+if (require.main === module) {
+    server = app.listen(port, () => {
+        console.log(`Analytics service listening at http://localhost:${port}`);
+    });
+} else {
+    server = app.listen(0);
+}
 
-app.use('/api/analytics', analyticsRoutes);
-
-app.listen(port, () => {
-  console.log(`Analytics Service listening at http://localhost:${port}`);
-});
+module.exports = { app, server };
